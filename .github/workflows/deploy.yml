@@ -10,10 +10,6 @@ env:
   SERVER_NAME: core-api
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-
-
   build:
     runs-on: ubuntu-latest
     
@@ -49,7 +45,7 @@ jobs:
         cache-to: type=gha,mode=max
 
   deploy:
-    needs: build-and-push
+    needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     container:
