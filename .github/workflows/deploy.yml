@@ -1,0 +1,78 @@
+name: Build and Deploy Websocket Server
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  IMAGE_NAME: websocket-server
+  REGISTRY: docker.io
+  SERVER_NAME: core-api
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26.1'
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build Docker image
+      run: docker build -t artistic_elixir_server:latest .
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    container:
+      image: alpacax/alpacon-cli:latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Login to Alpacon
+      run: alpacon login "https://ap1.alpacon.io/cjs-private" -t ${{ secrets.ALPACON_ACCESS_TOKEN }}
+
+    - name: Pull Docker via Alpacon
+      run: |
+          alpacon websh ${{ env.SERVER_NAME }} "docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}"
+
+          alpacon websh ${{ env.SERVER_NAME }} "docker stop ${{ env.IMAGE_NAME }} || true"
+          alpacon websh ${{ env.SERVER_NAME }} "docker rm ${{ env.IMAGE_NAME }} || true"
+
+          alpacon websh ${{ env.SERVER_NAME }} "docker rmi ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest || true"
+
+          alpacon websh ${{ env.SERVER_NAME }} "docker pull ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest"
+
+          alpacon websh ${{ env.SERVER_NAME }} "docker run -d --name ${{ env.IMAGE_NAME }} --restart unless-stopped -p 8080:8080 ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest"
+
+          alpacon websh ${{ env.SERVER_NAME }} "docker image prune -f"
