@@ -7,7 +7,7 @@ on:
 env:
   IMAGE_NAME: websocket-server
   REGISTRY: docker.io
-  SERVER_NAME: core-api
+  SERVER_NAME: websocket-server
 
 jobs:
   build:
